@@ -184,7 +184,7 @@ def load_deliverect_order_data():
     # Return the concatenated dataframe or an empty dataframe if no CSV files were found
     return df
 
-load_deliverect_order_data()
+imported_deliverect_order_data = load_deliverect_order_data()
 
 def load_deliverect_item_level_detail_data():
     # Change the working directory to the 'Order Details' folder in the Deliverect source folder
@@ -250,11 +250,6 @@ def load_deliverect_item_level_detail_data():
     # Filter records that have a blank value in 'TempColumn', indicating they are not present in 'clean_df'
     df = df.loc[df['TempColumn'].notna()]
 
-    # Create New ProductName and PLU, with price included
-    df['ItemPrice'] = df['ItemPrice'] / 100
-    df['CleanedProductPLU'] = df['ProductPLU'] + ' :' + df['ItemQuantities'].astype(str)
-    df['CleanedProductName'] = df['ItemQuantities'].astype(str) + 'x ' + df['ProductName'].astype(str) + ' ' + (df['ItemPrice'] / 100).astype(str)
-
     # Reorder DataFrame columns for better organization and readability
     # The columns are categorized and ordered based on their type and relevance to the data analysis
     first_cols = ['PrimaryKey', 'OrderID', 'Location', 'LocWithBrand', 'Brand', 'DeliveryType', 'Channel']  # Text Fields consistent across all data
@@ -276,23 +271,21 @@ def load_deliverect_item_level_detail_data():
     # TODO: De Dupe Order 865 from Friedrichshain in Jan 23
 
     # Create Item Level Pricing by multiplying 'ItemPrice' and 'ItemQuantities'
+    df['ItemPrice'] = (df['ItemPrice'] / 100).round(2)
     df['TotalPrice'] = df['ItemPrice'] * df['ItemQuantities']
 
     # Create a copy of the DataFrame with selected columns for consolidation
-    consolidated_df = df[
-        ['PrimaryKey', 'ProductName', 'ProductPLU', 'ItemQuantities', 'ItemPrice', 'TotalPrice', 'GrossAOV']].copy()
+    consolidated_df = df[['PrimaryKey', 'ProductName', 'ProductPLU', 'ItemQuantities', 'ItemPrice', 'TotalPrice', 'GrossAOV']].copy()
 
     # Define a custom aggregation function to extract the first 'GrossAOV' value within each 'PrimaryKey' group
     def first_total_order_amount(series):
         return series.iloc[0]
 
     # Group the data by 'PrimaryKey', calculate the sum of 'TotalPrice', and apply the custom aggregation function to 'GrossAOV'
-    consolidated_df = consolidated_df.groupby('PrimaryKey').agg(
-        {'TotalPrice': 'sum', 'GrossAOV': first_total_order_amount}).reset_index()
+    consolidated_df = consolidated_df.groupby('PrimaryKey').agg({'TotalPrice': 'sum', 'GrossAOV': first_total_order_amount}).reset_index()
 
     # Check if 'GrossAOV' and 'TotalPrice' are within a specified tolerance to identify reconciliation discrepancies
-    consolidated_df['Check'] = abs(
-        consolidated_df['GrossAOV'] - consolidated_df['TotalPrice']) < 0.001  # Define your tolerance here
+    consolidated_df['Check'] = abs(consolidated_df['GrossAOV'] - consolidated_df['TotalPrice']) < 0.001  # Define your tolerance here
 
     # Filter and keep only the rows where the reconciliation check failed
     consolidated_df = consolidated_df.loc[consolidated_df['Check'] == False]  # Change 'False' to False
@@ -326,11 +319,14 @@ def load_deliverect_item_level_detail_data():
     # Sort the DataFrame by 'OrderPlacedDate', 'OrderPlacedTime', and 'PrimaryKey' to meet your sorting requirements
     df.sort_values(['OrderPlacedDate', 'OrderPlacedTime', 'PrimaryKey'], inplace=True)
 
+    # Create New ProductName and PLU, with price included
+    df['CleanedProductPLU'] = df['ProductPLU'] + ' :' + df['ItemQuantities'].astype(str)
+    df['CleanedProductName'] = df['ItemQuantities'].astype(str) + 'x ' + df['ProductName'].astype(str) + ' ' + ((df['ItemPrice']).round(2)).astype(str)
+    #
     # Reset the index to maintain sequential order
     df = df.reset_index(drop=True)
 
     # Return the concatenated DataFrame or an empty DataFrame if no reconciliation discrepancies were found
     return df
 
-
-load_deliverect_item_level_detail_data()
+imported_deliverect_item_level_detail_data = load_deliverect_item_level_detail_data()
